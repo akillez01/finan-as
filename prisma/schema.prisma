@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  REFUND
+}
+
+enum TransactionMethod {
+  PIX
+  QR_CODE
+  MANUAL
+  TRANSFER
+  OTHER
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  REFUND
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum BillKind {
+  PAYABLE
+  RECEIVABLE
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  accounts     Account[]
+  categories   Category[]
+  transactions Transaction[]
+  bills        Bill[]
+  goals        Goal[]
+  importBatches ImportBatch[]
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  type         String
+  initialBalance Decimal     @db.Decimal(14, 2) @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Category {
+  id         String        @id @default(cuid())
+  userId     String
+  name       String
+  type       CategoryType
+  color      String?
+  icon       String?
+  isActive   Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id                 String            @id @default(cuid())
+  userId             String
+  accountId          String
+  categoryId         String
+  type               TransactionType
+  method             TransactionMethod @default(OTHER)
+  description        String
+  amount             Decimal           @db.Decimal(14, 2)
+  transactionDate    DateTime
+  notes              String?
+  isInternalTransfer Boolean           @default(false)
+  sourceFile         String?
+  importHash         String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account            Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category           Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  importItems        ImportItem[]
+
+  @@index([userId, transactionDate])
+  @@index([userId, type])
+  @@unique([userId, importHash])
+}
+
+model Bill {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  amount      Decimal    @db.Decimal(14, 2)
+  dueDate     DateTime
+  status      BillStatus @default(PENDING)
+  kind        BillKind
+  recurrence  String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dueDate])
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  targetAmount Decimal  @db.Decimal(14, 2)
+  monthRef    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, monthRef, name])
+}
+
+model ImportBatch {
+  id          String      @id @default(cuid())
+  userId      String
+  fileName    String
+  importedAt  DateTime    @default(now())
+  rawCount    Int
+  importedCount Int
+  skippedCount Int
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       ImportItem[]
+}
+
+model ImportItem {
+  id            String       @id @default(cuid())
+  importBatchId String
+  transactionId String?
+  lineNumber    Int
+  importHash    String
+  status        String
+  rawData       Json
+  importBatch   ImportBatch  @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([importBatchId, lineNumber])
+  @@index([importHash])
+}
