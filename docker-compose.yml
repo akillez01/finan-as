@@ -1,0 +1,27 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: finan
+      POSTGRES_PASSWORD: finan
+      POSTGRES_DB: finanas
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://finan:finan@db:5432/finanas?schema=public
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: super-secret-change-me
+    ports:
+      - '3000:3000'
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start"
+
+volumes:
+  postgres_data:
